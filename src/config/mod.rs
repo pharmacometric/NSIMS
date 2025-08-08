@@ -67,14 +67,38 @@ pub struct DemographicsConfig {
 pub struct CovariateConfig {
     pub effect: f64,          // Covariate effect
     pub reference: f64,       // Reference value
+    pub model: CovariateModel, // Model type
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CovariateModel {
+    Power,       // PARAM = THETA * (COV/REF)^EFFECT (default for continuous)
+    Exponential, // PARAM = THETA * exp(EFFECT * (COV - REF))
+    Linear,      // PARAM = THETA * (1 + EFFECT * (COV - REF)) (default for categorical)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulationConfig {
     pub time_points: Vec<f64>,
-    pub sigma: f64,           // Residual variability (SD)
+    pub error_model: ErrorModel,
     pub integration_method: IntegrationMethod,
     pub tolerance: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ErrorModel {
+    Proportional {
+        sigma: f64,  // Proportional SD
+    },
+    Additive {
+        sigma: f64,  // Additive SD
+    },
+    Combined {
+        sigma_prop: f64,  // Proportional SD
+        sigma_add: f64,   // Additive SD
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

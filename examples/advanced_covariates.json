@@ -3,7 +3,7 @@
     "compartments": 2,
     "parameters": {
       "CL": {
-        "theta": 3.5,
+        "theta": 3.0,
         "omega": 25.0,
         "bounds": [0.5, 15.0]
       },
@@ -39,11 +39,28 @@
     "covariates": {
       "CL_WT": {
         "effect": 0.75,
-        "reference": 70.0
+        "reference": 70.0,
+        "model": "power"
       },
       "V1_WT": {
         "effect": 1.0,
-        "reference": 70.0
+        "reference": 70.0,
+        "model": "power"
+      },
+      "CL_AGE": {
+        "effect": -0.01,
+        "reference": 40.0,
+        "model": "exponential"
+      },
+      "CL_SEX": {
+        "effect": 0.2,
+        "reference": 0.0,
+        "model": "linear"
+      },
+      "V1_RACE": {
+        "effect": -0.15,
+        "reference": 1.0,
+        "model": "linear"
       }
     }
   },

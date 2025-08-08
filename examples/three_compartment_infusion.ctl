@@ -28,7 +28,8 @@ $OMEGA
 0.2025   ; V3 - 45% CV
 
 $SIGMA
-0.0324   ; Proportional error - 18% CV
+MODEL = ADDITIVE
+0.0625   ; Additive error - 0.25 mg/L SD
 
 $DOSING
 ROUTE = INFUSION

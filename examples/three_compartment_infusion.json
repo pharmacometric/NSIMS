@@ -52,21 +52,27 @@
     "covariates": {
       "CL_WT": {
         "effect": 0.75,
-        "reference": 70.0
+        "reference": 70.0,
+        "model": "power"
       },
       "V1_WT": {
         "effect": 1.0,
-        "reference": 70.0
+        "reference": 70.0,
+        "model": "power"
       },
       "CL_AGE": {
         "effect": -0.3,
-        "reference": 40.0
+        "reference": 40.0,
+        "model": "exponential"
       }
     }
   },
   "simulation": {
     "time_points": [0.0, 0.5, 1.0, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0, 12.0, 18.0, 24.0, 24.5, 25.0, 26.0, 28.0, 32.0, 36.0, 48.0, 72.0, 96.0],
-    "sigma": 0.18,
+    "error_model": {
+      "type": "additive",
+      "sigma": 0.25
+    },
     "integration_method": "analytical"
   }
 }

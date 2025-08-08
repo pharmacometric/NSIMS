@@ -1,14 +1,14 @@
 pub mod population;
 pub mod individual;
 pub mod variability;
-
-use crate::config::Config;
+use crate::config::{ErrorModel,CovariateModel,Config};
 use crate::models::{create_model, PKModel};
 use crate::dosing::DosingRegimen;
 use crate::error::{PKError, PKResult};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
-use rand_distr::Normal;
+// Corrected: Import the Distribution trait
+use rand_distr::{Normal, Distribution};
 use log::{info, debug};
 
 pub use population::*;
@@ -59,10 +59,10 @@ impl Simulator {
         let model_compartments = self.config.model.compartments;
         let time_points = self.config.simulation.time_points.clone();
         
-        let individual_params = self.generate_individual_parameters()?;
+        let (demographics, individual_params) = self.generate_individual_parameters()?;
+        
         let mut model = create_model(model_compartments)?;
         model.set_parameters(&individual_params)?;
-        let demographics = self.generate_demographics()?;
         
         let mut observations = Vec::new();
         for &time in &time_points {
@@ -84,20 +84,24 @@ impl Simulator {
             observations,
         })
     }
-    
-    fn generate_individual_parameters(&mut self) -> PKResult<std::collections::HashMap<String, f64>> {
+
+    fn generate_individual_parameters(&mut self) -> PKResult<(Demographics, std::collections::HashMap<String, f64>)> {
         let mut params = std::collections::HashMap::new();
         
         // Clone the parameters to avoid borrowing conflicts
         let model_parameters = self.config.model.parameters.clone();
+        let demographics = self.generate_demographics()?;
         
         for (name, param_config) in &model_parameters {
             let mut value = param_config.theta;
             
+            // Apply covariate effects
+            value = self.apply_covariate_effects(value, name, &demographics);
+            
             if let Some(omega) = param_config.omega {
                 let omega_sd = omega / 100.0;
-                let eta: f64 = self.rng.sample(rand_distr::Normal::new(0.0, omega_sd)
-                    .map_err(|_| PKError::Random)?);
+                let normal_dist = Normal::new(0.0, omega_sd).map_err(|_| PKError::Random)?;
+                let eta: f64 = self.rng.sample(normal_dist); // This now works
                 value *= eta.exp();
             }
             
@@ -108,41 +112,85 @@ impl Simulator {
             params.insert(name.clone(), value);
         }
         
-        Ok(params)
+        Ok((demographics, params))
     }
     
     fn generate_demographics(&mut self) -> PKResult<Demographics> {
         // Clone demographic config to avoid borrowing conflicts
         let demo_config = self.config.population.demographics.clone();
         
-        let weight = self.rng.sample(Normal::new(
-            demo_config.weight_mean,
-            demo_config.weight_sd,
-        ).map_err(|_| PKError::Random)?);
+        let weight_dist = Normal::new(demo_config.weight_mean, demo_config.weight_sd)
+            .map_err(|_| PKError::Random)?;
+        let weight = self.rng.sample(weight_dist); // This now works
         
-        let age = self.rng.sample(Normal::new(
-            demo_config.age_mean,
-            demo_config.age_sd,
-        ).map_err(|_| PKError::Random)?);
+        let age_dist = Normal::new(demo_config.age_mean, demo_config.age_sd)
+            .map_err(|_| PKError::Random)?;
+        let age = self.rng.sample(age_dist); // This now works
         
         Ok(Demographics {
             weight: weight.max(30.0).min(200.0),
             age: age.max(18.0).min(100.0),
         })
     }
-    
+
     fn add_residual_variability(&mut self, predicted: f64) -> PKResult<f64> {
-        if predicted <= 0.0 {
-            return Ok(0.0);
+        match &self.config.simulation.error_model {
+            ErrorModel::Proportional { sigma } => {
+                apply_proportional_error(predicted, *sigma, &mut self.rng)
+            },
+            ErrorModel::Additive { sigma } => {
+                if predicted <= 0.0 {
+                    return Ok(0.0);
+                }
+                let normal = Normal::new(0.0, *sigma).map_err(|_| PKError::Random)?;
+                let epsilon = normal.sample(&mut self.rng); // This now works
+                Ok((predicted + epsilon).max(0.0))
+            },
+            ErrorModel::Combined { sigma_prop, sigma_add } => {
+                apply_combined_error(predicted, *sigma_add, *sigma_prop, &mut self.rng)
+            },
+        }
+    }
+    
+    fn apply_covariate_effects(&self, base_value: f64, param_name: &str, demographics: &Demographics) -> f64 {
+        let mut value = base_value;
+        
+        if let Some(covariates) = &self.config.population.covariates {
+            // Weight effect
+            if let Some(wt_config) = covariates.get(&format!("{}_WT", param_name)) {
+                value *= self.apply_covariate_effect(
+                    demographics.weight, 
+                    wt_config.reference, 
+                    wt_config.effect, 
+                    &wt_config.model
+                );
+            }
+            
+            // Age effect
+            if let Some(age_config) = covariates.get(&format!("{}_AGE", param_name)) {
+                value *= self.apply_covariate_effect(
+                    demographics.age, 
+                    age_config.reference, 
+                    age_config.effect, 
+                    &age_config.model
+                );
+            }
         }
         
-        // Clone sigma to avoid borrowing conflicts
-        let sigma = self.config.simulation.sigma;
-        
-        let epsilon: f64 = self.rng.sample(Normal::new(0.0, sigma)
-            .map_err(|_| PKError::Random)?);
-        let observed = predicted * (1.0 + epsilon);
-        
-        Ok(observed.max(0.0))
+        value
+    }
+    
+    fn apply_covariate_effect(&self, covariate_value: f64, reference: f64, effect: f64, model: &CovariateModel) -> f64 {
+        match model {
+            CovariateModel::Power => {
+                (covariate_value / reference).powf(effect)
+            },
+            CovariateModel::Exponential => {
+                (effect * (covariate_value - reference)).exp()
+            },
+            CovariateModel::Linear => {
+                1.0 + effect * (covariate_value - reference)
+            },
+        }
     }
 }

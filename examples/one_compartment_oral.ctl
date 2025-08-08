@@ -19,6 +19,7 @@ $OMEGA
 0.16     ; KA - 40% CV
 
 $SIGMA
+MODEL = PROPORTIONAL
 0.0225   ; Proportional error - 15% CV
 
 $DOSING

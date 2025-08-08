@@ -6,9 +6,11 @@ A comprehensive Rust implementation for population pharmacokinetics simulation w
 
 - **Multiple Compartment Models**: 1, 2, and 3-compartment pharmacokinetic models
 - **Dosing Regimens**: Oral, IV bolus, and IV infusion administration
-- **Population Variability**: Inter-individual (Omega) and residual (Sigma) variability
+- **Population Variability**: Inter-individual (Omega) and multiple residual error models
+- **Error Models**: Proportional, additive, and combined error models
+- **Covariate Effects**: Power, exponential, and linear covariate models
 - **NONMEM-Style Algorithms**: Similar parameterization and error models
-- **Flexible Configuration**: JSON-based configuration files
+- **Flexible Configuration**: JSON and NONMEM control stream configuration files
 - **Comprehensive Output**: CSV and JSON formatted results with detailed reports
 
 ## Installation
@@ -103,6 +105,26 @@ cargo run --release -- \
   --seed 54321
 ```
 
+### 4. Advanced Covariate Model Examples
+
+Simulate with multiple covariate effects and combined error model:
+
+```bash
+# JSON format with advanced covariates
+cargo run --release -- \
+  --config examples/advanced_covariates.json \
+  --output results/advanced_covariates \
+  --patients 250 \
+  --seed 98765
+
+# NONMEM format with advanced covariates
+cargo run --release -- \
+  --config examples/advanced_covariates.ctl \
+  --output results/advanced_covariates_ctl \
+  --patients 250 \
+  --seed 98765
+```
+
 ### JSON Format Examples
 
 **Model Specifications:**
@@ -168,6 +190,13 @@ The program supports NONMEM-style control streams with the following blocks:
 - **$DOSING**: Custom dosing specification
 - **$POPULATION**: Population demographics and covariates
 - **$SIMULATION**: Simulation settings
+
+### NONMEM Syntax Support**: 
+   - `$SUBROUTINES` with ADVAN1/ADVAN3/ADVAN11
+   - `$THETA` with bounds: `(lower, init, upper)`
+   - `$OMEGA` and `$SIGMA` as variance values
+   - `$SIGMA` with error model specification: `MODEL = PROPORTIONAL|ADDITIVE|COMBINED`
+   - Custom `$DOSING`, `$POPULATION`, and `$SIMULATION` blocks
 
 ### Example Control Stream Structure
 
@@ -291,7 +320,7 @@ Each simulation generates several output files:
 ### Two-Compartment Model
 - **CL**: Clearance (L/h)
 - **V1**: Central volume of distribution (L)
-- **Q**: Inter-compartmental clearance (L/h)
+- **Q2**: Inter-compartmental clearance (L/h)
 - **V2**: Peripheral volume of distribution (L)
 - **KA**: Absorption rate constant (h⁻¹) - for oral dosing
 
@@ -312,12 +341,14 @@ Each simulation generates several output files:
 - Applied to all PK parameters
 
 ### Residual Variability (Sigma)
-- Proportional error model: Y = F × (1 + ε)
-- Where ε ~ N(0, σ²)
+- **Proportional**: Y = F × (1 + ε₁), where ε₁ ~ N(0, σ²)
+- **Additive**: Y = F + ε₂, where ε₂ ~ N(0, σ²)
+- **Combined**: Y = F × (1 + ε₁) + ε₂, where ε₁, ε₂ ~ N(0, σ²)
 
 ### Covariate Effects
-- Allometric scaling for body weight
-- Power model: PARAM = THETA × (COV/REF)^EFFECT
+- **Power Model**: PARAM = THETA × (COV/REF)^EFFECT (default for continuous covariates like weight, age)
+- **Exponential Model**: PARAM = THETA × exp(EFFECT × (COV - REF))
+- **Linear Model**: PARAM = THETA × (1 + EFFECT × (COV - REF)) (default for categorical covariates like sex, race)
 
 ## Advanced Features
 
@@ -328,14 +359,36 @@ The program supports covariate effects on parameters:
 "covariates": {
   "CL_WT": {
     "effect": 0.75,
-    "reference": 70.0
+    "reference": 70.0,
+    "model": "power"
   },
   "CL_AGE": {
     "effect": -0.3,
-    "reference": 40.0
+    "reference": 40.0,
+    "model": "exponential"
+  },
+  "CL_SEX": {
+    "effect": 0.2,
+    "reference": 0.0,
+    "model": "linear"
   }
 }
 ```
+
+### Error Model Specifications
+
+```json
+"error_model": {
+  "type": "combined",
+  "sigma_prop": 0.12,
+  "sigma_add": 0.05
+}
+```
+
+Available error models:
+- **proportional**: Only proportional error
+- **additive**: Only additive error  
+- **combined**: Both proportional and additive error
 
 ### Multiple Dosing
 Support for multiple doses at different times:

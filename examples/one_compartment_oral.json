@@ -48,7 +48,10 @@
   },
   "simulation": {
     "time_points": [0.0, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 12.0, 16.0, 24.0, 36.0, 48.0],
-    "sigma": 0.15,
+    "error_model": {
+      "type": "proportional",
+      "sigma": 0.15
+    },
     "integration_method": "analytical",
     "tolerance": 1e-6
   }

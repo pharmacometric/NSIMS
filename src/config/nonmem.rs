@@ -18,8 +18,16 @@ impl ControlStreamParser {
     fn new(content: &str) -> Self {
         let lines: Vec<String> = content
             .lines()
-            .map(|line| line.trim().to_string())
-            .filter(|line| !line.is_empty() && !line.starts_with(';'))
+            .map(|line| {
+                // Remove comments (everything after semicolon)
+                let line = if let Some(pos) = line.find(';') {
+                    &line[..pos]
+                } else {
+                    line
+                };
+                line.trim().to_string()
+            })
+            .filter(|line| !line.is_empty())
             .collect();
         
         Self {
@@ -79,7 +87,7 @@ impl ControlStreamParser {
                 if simulation_config.is_none() {
                     simulation_config = Some(SimulationConfig {
                         time_points: vec![],
-                        sigma: 0.1,
+                        error_model: ErrorModel::Proportional { sigma: 0.1 },
                         integration_method: IntegrationMethod::Analytical,
                         tolerance: None,
                     });
@@ -113,7 +121,7 @@ impl ControlStreamParser {
         
         let simulation_config = simulation_config.unwrap_or_else(|| SimulationConfig {
             time_points: vec![0.0, 1.0, 2.0, 4.0, 8.0, 12.0, 24.0],
-            sigma: 0.1,
+            error_model: ErrorModel::Proportional { sigma: 0.1 },
             integration_method: IntegrationMethod::Analytical,
             tolerance: None,
         });
@@ -279,23 +287,72 @@ impl ControlStreamParser {
     fn parse_sigma_block(&mut self) -> PKResult<SimulationConfig> {
         self.current_line += 1;
         
-        let line = &self.lines[self.current_line];
-        let sigma_value = self.parse_sigma_line(line)?;
-        self.current_line += 1;
+        let mut error_model = ErrorModel::Proportional { sigma: 0.1 };
+        let mut model_type = "proportional";
+        
+        while self.current_line < self.lines.len() {
+            let line = &self.lines[self.current_line];
+            
+            if line.starts_with('$') {
+                break;
+            }
+            
+            if line.to_uppercase().contains("MODEL") {
+                if line.to_uppercase().contains("ADDITIVE") {
+                    model_type = "additive";
+                } else if line.to_uppercase().contains("COMBINED") {
+                    model_type = "combined";
+                } else if line.to_uppercase().contains("PROPORTIONAL") {
+                    model_type = "proportional";
+                }
+            } else {
+                let sigma_values = self.parse_sigma_line(line)?;
+                
+                error_model = match model_type {
+                    "additive" => ErrorModel::Additive { 
+                        sigma: sigma_values[0].sqrt() 
+                    },
+                    "combined" => ErrorModel::Combined { 
+                        sigma_prop: sigma_values[0].sqrt(),
+                        sigma_add: if sigma_values.len() > 1 { 
+                            sigma_values[1].sqrt() 
+                        } else { 
+                            0.1 
+                        }
+                    },
+                    _ => ErrorModel::Proportional { 
+                        sigma: sigma_values[0].sqrt() 
+                    },
+                };
+            }
+            
+            self.current_line += 1;
+        }
         
         Ok(SimulationConfig {
             time_points: vec![0.0, 1.0, 2.0, 4.0, 8.0, 12.0, 24.0],
-            sigma: sigma_value.sqrt(), // Convert variance to SD
+            error_model,
             integration_method: IntegrationMethod::Analytical,
             tolerance: None,
         })
     }
     
-    fn parse_sigma_line(&self, line: &str) -> PKResult<f64> {
+    fn parse_sigma_line(&self, line: &str) -> PKResult<Vec<f64>> {
         let cleaned = line.replace("(", "").replace(")", "");
-        let value = cleaned.trim().parse::<f64>()
-            .map_err(|_| PKError::Validation(format!("Invalid sigma value: {}", line)))?;
-        Ok(value)
+        
+        if cleaned.contains(',') {
+            // Multiple sigma values (for combined error model)
+            let values: Result<Vec<f64>, _> = cleaned
+                .split(',')
+                .map(|s| s.trim().parse::<f64>())
+                .collect();
+            values.map_err(|_| PKError::Validation(format!("Invalid sigma values: {}", line)))
+        } else {
+            // Single sigma value
+            let value = cleaned.trim().parse::<f64>()
+                .map_err(|_| PKError::Validation(format!("Invalid sigma value: {}", line)))?;
+            Ok(vec![value])
+        }
     }
     
     fn parse_dosing_block(&mut self) -> PKResult<DosingConfig> {
@@ -482,11 +539,38 @@ impl ControlStreamParser {
         }
         
         let param = format!("{}_{}", key_parts[1], key_parts[2]);
-        let reference = 70.0; // Default reference value
+        let covariate_name = key_parts[2];
+        
+        // Set reference value based on covariate type
+        let reference = match covariate_name {
+            "WT" | "WEIGHT" => 70.0,
+            "AGE" => 40.0,
+            "HEIGHT" => 170.0,
+            "BMI" => 25.0,
+            "CRCL" => 100.0,
+            "SEX" | "GENDER" => 0.0,  // 0=female, 1=male
+            "RACE" | "ETHNIC" => 1.0, // 1=Caucasian, 2=Asian, 3=African, etc.
+            _ => 1.0, // Default reference
+        };
+        
+        // Determine covariate model based on covariate type
+        let model = match covariate_name {
+            "SEX" | "RACE" | "GENDER" | "ETHNIC" => CovariateModel::Linear,
+            "WT" | "WEIGHT" | "AGE" | "HEIGHT" | "BMI" | "CRCL" => CovariateModel::Power,
+            _ => {
+                // Default based on typical values - categorical if small integers
+                if value.abs() < 2.0 && value.fract() == 0.0 {
+                    CovariateModel::Linear
+                } else {
+                    CovariateModel::Power
+                }
+            }
+        };
         
         Ok((param, CovariateConfig {
             effect: value,
             reference,
+            model,
         }))
     }
 }
@@ -526,5 +610,87 @@ $SIGMA
         assert_eq!(config.model.parameters["CL"].theta, 2.0);
         assert_eq!(config.model.parameters["V"].theta, 15.0);
         assert_eq!(config.model.parameters["KA"].theta, 1.5);
+    }
+    
+    #[test]
+    fn test_parse_theta_with_bounds() {
+        let parser = ControlStreamParser::new("");
+        
+        // Test simple value
+        let result = parser.parse_theta_line("2.5").unwrap();
+        assert_eq!(result, (None, 2.5, None));
+        
+        // Test with bounds
+        let result = parser.parse_theta_line("(0.1, 2.0, 10.0)").unwrap();
+        assert_eq!(result, (Some(0.1), 2.0, Some(10.0)));
+        
+        // Test with spaces
+        let result = parser.parse_theta_line("( 0.5 , 3.0 , 15.0 )").unwrap();
+        assert_eq!(result, (Some(0.5), 3.0, Some(15.0)));
+    }
+    
+    #[test]
+    fn test_parse_omega_conversion() {
+        let parser = ControlStreamParser::new("");
+        
+        // Test variance to CV% conversion
+        let result = parser.parse_omega_line("0.09").unwrap();
+        assert!((result - 30.0).abs() < 1e-6); // sqrt(0.09) * 100 = 30%
+        
+        let result = parser.parse_omega_line("0.0625").unwrap();
+        assert!((result - 25.0).abs() < 1e-6); // sqrt(0.0625) * 100 = 25%
+    }
+    
+    #[test]
+    fn test_parse_covariate_line() {
+        let parser = ControlStreamParser::new("");
+        
+        // Test weight effect
+        let (param, config) = parser.parse_covariate_line("COV_CL_WT_EFFECT = 0.75").unwrap();
+        assert_eq!(param, "CL_WT");
+        assert_eq!(config.effect, 0.75);
+        assert_eq!(config.reference, 70.0);
+        assert!(matches!(config.model, CovariateModel::Power));
+        
+        // Test categorical effect
+        let (param, config) = parser.parse_covariate_line("COV_CL_SEX_EFFECT = 0.2").unwrap();
+        assert_eq!(param, "CL_SEX");
+        assert_eq!(config.effect, 0.2);
+        assert_eq!(config.reference, 0.0);
+        assert!(matches!(config.model, CovariateModel::Linear));
+    }
+    
+    #[test]
+    fn test_parse_time_values() {
+        let parser = ControlStreamParser::new("");
+        
+        let result = parser.extract_time_values("TIME_POINTS = 0.0, 1.0, 2.0, 4.0").unwrap();
+        assert_eq!(result, vec![0.0, 1.0, 2.0, 4.0]);
+        
+        let result = parser.extract_time_values("TIMES = 0.0,12.0,24.0").unwrap();
+        assert_eq!(result, vec![0.0, 12.0, 24.0]);
+    }
+    
+    #[test]
+    fn test_parse_error_models() {
+        let content_prop = r#"
+$SIGMA
+MODEL = PROPORTIONAL
+0.0225
+"#;
+        let mut parser = ControlStreamParser::new(content_prop);
+        parser.current_line = 1; // Skip to $SIGMA
+        let config = parser.parse_sigma_block().unwrap();
+        assert!(matches!(config.error_model, ErrorModel::Proportional { .. }));
+        
+        let content_combined = r#"
+$SIGMA
+MODEL = COMBINED
+0.0144, 0.0025
+"#;
+        let mut parser = ControlStreamParser::new(content_combined);
+        parser.current_line = 1; // Skip to $SIGMA
+        let config = parser.parse_sigma_block().unwrap();
+        assert!(matches!(config.error_model, ErrorModel::Combined { .. }));
     }
 }
