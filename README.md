@@ -32,6 +32,15 @@ A comprehensive Rust implementation for population pharmacokinetics simulation w
 cargo run --release -- --config <config_file> --output <output_directory> --patients <number>
 ```
 
+### Configuration File Formats
+
+The program supports two configuration file formats:
+
+1. **JSON format** (`.json` extension) - Modern, structured format
+2. **NONMEM control stream** (`.ctl`, `.mod`, or `.txt` extension) - Traditional NONMEM-style format
+
+The program automatically detects the format based on file extension or content.
+
 ### Command Line Options
 
 - `--config, -c`: Path to JSON configuration file
@@ -41,6 +50,8 @@ cargo run --release -- --config <config_file> --output <output_directory> --pati
 - `--verbose, -v`: Enable verbose logging
 
 ## Example Simulations
+
+### Using JSON Configuration Files
 
 ### 1. One-Compartment Oral Model
 
@@ -53,6 +64,46 @@ cargo run --release -- \
   --patients 200 \
   --seed 12345
 ```
+
+### Using NONMEM Control Stream Files
+
+### 1. One-Compartment Oral Model (NONMEM format)
+
+Simulate 200 patients using NONMEM control stream:
+
+```bash
+cargo run --release -- \
+  --config examples/one_compartment_oral.ctl \
+  --output results/one_compartment_oral_ctl \
+  --patients 200 \
+  --seed 12345
+```
+
+### 2. Two-Compartment IV Bolus Model (NONMEM format)
+
+Simulate 150 patients with NONMEM control stream:
+
+```bash
+cargo run --release -- \
+  --config examples/two_compartment_iv_bolus.ctl \
+  --output results/two_compartment_iv_ctl \
+  --patients 150 \
+  --seed 67890
+```
+
+### 3. Three-Compartment IV Infusion Model (NONMEM format)
+
+Simulate 100 patients with NONMEM control stream:
+
+```bash
+cargo run --release -- \
+  --config examples/three_compartment_infusion.ctl \
+  --output results/three_compartment_infusion_ctl \
+  --patients 100 \
+  --seed 54321
+```
+
+### JSON Format Examples
 
 **Model Specifications:**
 - Route: Oral administration
@@ -99,7 +150,61 @@ cargo run --release -- \
 - Variability: 28% CV on CL, 22% CV on V1, 40% CV on Q2, 35% CV on V2, 50% CV on Q3, 45% CV on V3
 - Residual Error: 18% proportional
 
+## NONMEM Control Stream Format
+
+The program supports NONMEM-style control streams with the following blocks:
+
+### Required Blocks
+
+- **$PROBLEM**: Problem description (optional)
+- **$SUBROUTINES**: Model specification (ADVAN1, ADVAN3, ADVAN11)
+- **$THETA**: Parameter initial estimates with optional bounds
+- **$OMEGA**: Inter-individual variability (as variance)
+- **$SIGMA**: Residual variability (as variance)
+
+### Optional Blocks
+
+- **$PK**: PK model code (parsed but not executed)
+- **$DOSING**: Custom dosing specification
+- **$POPULATION**: Population demographics and covariates
+- **$SIMULATION**: Simulation settings
+
+### Example Control Stream Structure
+
+```
+$PROBLEM One compartment oral model
+$SUBROUTINES ADVAN1 TRANS2
+$PK
+CL = THETA(1)
+V = THETA(2)
+KA = THETA(3)
+$THETA
+(0.1, 2.0, 10.0)  ; CL
+(5.0, 15.0, 50.0) ; V
+(0.1, 1.5, 5.0)   ; KA
+$OMEGA
+0.09     ; CL - 30% CV
+0.0625   ; V - 25% CV
+0.16     ; KA - 40% CV
+$SIGMA
+0.0225   ; Proportional error - 15% CV
+$DOSING
+ROUTE = ORAL
+AMOUNT = 100.0
+TIMES = 0.0, 12.0, 24.0
+$SIMULATION
+TIME_POINTS = 0.0, 1.0, 2.0, 4.0, 8.0, 12.0, 24.0
+```
+
+### ADVAN Subroutines Supported
+
+- **ADVAN1**: One-compartment model
+- **ADVAN3**: Two-compartment model  
+- **ADVAN11**: Three-compartment model
+
 ## Configuration File Format
+
+### JSON Format
 
 The simulation uses JSON configuration files with the following structure:
 
@@ -146,6 +251,18 @@ The simulation uses JSON configuration files with the following structure:
   }
 }
 ```
+
+### Comparison: JSON vs NONMEM Control Stream
+
+| Feature | JSON Format | NONMEM Control Stream |
+|---------|-------------|----------------------|
+| **Syntax** | Modern JSON | Traditional NONMEM |
+| **Readability** | Structured, clear | Familiar to NONMEM users |
+| **Validation** | Built-in JSON validation | Custom parser |
+| **Comments** | Limited | Full comment support |
+| **Flexibility** | High | NONMEM-compatible |
+
+Choose the format that best fits your workflow and team preferences.
 
 ## Output Files
 
@@ -231,6 +348,24 @@ Support for multiple doses at different times:
 }
 ```
 
+### Reproducible Simulations with Seeds
+
+Use the `--seed` option for reproducible results:
+
+```bash
+# JSON format
+cargo run --release -- -c examples/one_compartment_oral.json -o results -p 100 --seed 12345
+
+# NONMEM control stream format
+cargo run --release -- -c examples/one_compartment_oral.ctl -o results -p 100 --seed 12345
+```
+
+Running the same command with the same seed will produce identical results, essential for:
+- Validation studies
+- Regulatory submissions  
+- Method comparison
+- Debugging and troubleshooting
+
 ## Testing
 
 Run the test suite:
@@ -250,11 +385,14 @@ Run specific test modules:
 ```bash
 cargo test models::one_compartment
 cargo test simulation
+cargo test config::nonmem
 ```
 
 ## Examples and Validation
 
 ### Running All Examples
+
+#### JSON Format Examples
 
 ```bash
 # One-compartment oral
@@ -267,21 +405,45 @@ cargo run --release -- -c examples/two_compartment_iv_bolus.json -o results/exam
 cargo run --release -- -c examples/three_compartment_infusion.json -o results/example3 -p 200
 ```
 
+#### NONMEM Control Stream Examples
+
+```bash
+# One-compartment oral (NONMEM format)
+cargo run --release -- -c examples/one_compartment_oral.ctl -o results/nonmem_example1 -p 500 --seed 12345
+
+# Two-compartment IV bolus (NONMEM format)
+cargo run --release -- -c examples/two_compartment_iv_bolus.ctl -o results/nonmem_example2 -p 300 --seed 67890
+
+# Three-compartment IV infusion (NONMEM format)
+cargo run --release -- -c examples/three_compartment_infusion.ctl -o results/nonmem_example3 -p 200 --seed 54321
+```
+
 ### Creating Custom Configurations
 
+#### JSON Format
 1. Copy an existing example configuration
 2. Modify parameters, dosing, or simulation settings
 3. Run with your custom configuration
 
+#### NONMEM Control Stream Format
+1. Copy an existing `.ctl` file
+2. Modify the $THETA, $OMEGA, $SIGMA, or $DOSING blocks
+3. Update population demographics in $POPULATION block
+4. Adjust simulation settings in $SIMULATION block
+
+### Format Conversion
+
+You can easily convert between formats by running simulations and examining the generated `population_summary.json` file, which contains all the configuration information in JSON format.
+
 ### Reproducible Simulations
 
-Use the `--seed` option for reproducible results:
-
 ```bash
-cargo run --release -- -c config.json -o results -p 100 --seed 12345
+# Both formats support reproducible simulations
+cargo run --release -- -c examples/one_compartment_oral.json -o results -p 100 --seed 12345
+cargo run --release -- -c examples/one_compartment_oral.ctl -o results -p 100 --seed 12345
 ```
 
-Running the same command with the same seed will produce identical results, which is essential for:
+Running the same command with the same seed will produce identical results regardless of configuration format, which is essential for:
 - Validation studies
 - Regulatory submissions
 - Method comparison
