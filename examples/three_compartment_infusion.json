@@ -1,0 +1,72 @@
+{
+  "model": {
+    "compartments": 3,
+    "parameters": {
+      "CL": {
+        "theta": 4.2,
+        "omega": 28.0,
+        "bounds": [1.0, 20.0]
+      },
+      "V1": {
+        "theta": 10.0,
+        "omega": 22.0,
+        "bounds": [3.0, 25.0]
+      },
+      "Q2": {
+        "theta": 3.0,
+        "omega": 40.0,
+        "bounds": [0.5, 15.0]
+      },
+      "V2": {
+        "theta": 15.0,
+        "omega": 35.0,
+        "bounds": [5.0, 40.0]
+      },
+      "Q3": {
+        "theta": 1.5,
+        "omega": 50.0,
+        "bounds": [0.1, 8.0]
+      },
+      "V3": {
+        "theta": 25.0,
+        "omega": 45.0,
+        "bounds": [8.0, 80.0]
+      }
+    }
+  },
+  "dosing": {
+    "route": "ivinfusion",
+    "amount": 1000.0,
+    "times": [0.0, 24.0],
+    "additional": {
+      "duration": 2.0
+    }
+  },
+  "population": {
+    "demographics": {
+      "weight_mean": 72.0,
+      "weight_sd": 16.0,
+      "age_mean": 55.0,
+      "age_sd": 18.0
+    },
+    "covariates": {
+      "CL_WT": {
+        "effect": 0.75,
+        "reference": 70.0
+      },
+      "V1_WT": {
+        "effect": 1.0,
+        "reference": 70.0
+      },
+      "CL_AGE": {
+        "effect": -0.3,
+        "reference": 40.0
+      }
+    }
+  },
+  "simulation": {
+    "time_points": [0.0, 0.5, 1.0, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0, 12.0, 18.0, 24.0, 24.5, 25.0, 26.0, 28.0, 32.0, 36.0, 48.0, 72.0, 96.0],
+    "sigma": 0.18,
+    "integration_method": "analytical"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "model": {
+    "compartments": 2,
+    "parameters": {
+      "CL": {
+        "theta": 3.5,
+        "omega": 25.0,
+        "bounds": [0.5, 15.0]
+      },
+      "V1": {
+        "theta": 12.0,
+        "omega": 20.0,
+        "bounds": [5.0, 30.0]
+      },
+      "Q2": {
+        "theta": 2.0,
+        "omega": 35.0,
+        "bounds": [0.1, 10.0]
+      },
+      "V2": {
+        "theta": 8.0,
+        "omega": 30.0,
+        "bounds": [2.0, 25.0]
+      }
+    }
+  },
+  "dosing": {
+    "route": "ivbolus",
+    "amount": 500.0,
+    "times": [0.0]
+  },
+  "population": {
+    "demographics": {
+      "weight_mean": 75.0,
+      "weight_sd": 18.0,
+      "age_mean": 50.0,
+      "age_sd": 15.0
+    },
+    "covariates": {
+      "CL_WT": {
+        "effect": 0.75,
+        "reference": 70.0
+      },
+      "V1_WT": {
+        "effect": 1.0,
+        "reference": 70.0
+      }
+    }
+  },
+  "simulation": {
+    "time_points": [0.0, 0.083, 0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 12.0, 18.0, 24.0, 36.0, 48.0, 72.0],
+    "sigma": 0.12,
+    "integration_method": "analytical"
+  }
+}

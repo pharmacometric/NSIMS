@@ -1,0 +1,55 @@
+{
+  "model": {
+    "compartments": 1,
+    "parameters": {
+      "CL": {
+        "theta": 2.0,
+        "omega": 30.0,
+        "bounds": [0.1, 10.0]
+      },
+      "V": {
+        "theta": 15.0,
+        "omega": 25.0,
+        "bounds": [5.0, 50.0]
+      },
+      "KA": {
+        "theta": 1.5,
+        "omega": 40.0,
+        "bounds": [0.1, 5.0]
+      }
+    }
+  },
+  "dosing": {
+    "route": "oral",
+    "amount": 100.0,
+    "times": [0.0, 12.0, 24.0],
+    "additional": {
+      "bioavailability": 0.8,
+      "lag_time": 0.5
+    }
+  },
+  "population": {
+    "demographics": {
+      "weight_mean": 70.0,
+      "weight_sd": 15.0,
+      "age_mean": 45.0,
+      "age_sd": 12.0
+    },
+    "covariates": {
+      "CL_WT": {
+        "effect": 0.75,
+        "reference": 70.0
+      },
+      "V_WT": {
+        "effect": 1.0,
+        "reference": 70.0
+      }
+    }
+  },
+  "simulation": {
+    "time_points": [0.0, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 12.0, 16.0, 24.0, 36.0, 48.0],
+    "sigma": 0.15,
+    "integration_method": "analytical",
+    "tolerance": 1e-6
+  }
+}
