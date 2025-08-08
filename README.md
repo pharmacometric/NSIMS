@@ -291,7 +291,7 @@ Each simulation generates several output files:
 ### Two-Compartment Model
 - **CL**: Clearance (L/h)
 - **V1**: Central volume of distribution (L)
-- **Q2**: Inter-compartmental clearance (L/h)
+- **Q**: Inter-compartmental clearance (L/h)
 - **V2**: Peripheral volume of distribution (L)
 - **KA**: Absorption rate constant (h⁻¹) - for oral dosing
 
