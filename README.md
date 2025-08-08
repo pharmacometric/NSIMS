@@ -149,7 +149,7 @@ cargo run --release -- \
 **Model Specifications:**
 - Route: IV bolus
 - Dose: 500 mg single dose
-- Parameters: CL (3.5 L/h), V1 (12.0 L), Q2 (2.0 L/h), V2 (8.0 L)
+- Parameters: CL (3.5 L/h), V1 (12.0 L), Q (2.0 L/h), V2 (8.0 L)
 - Variability: 25% CV on CL, 20% CV on V1, 35% CV on Q2, 30% CV on V2
 - Residual Error: 12% proportional
 
@@ -246,6 +246,16 @@ The simulation uses JSON configuration files with the following structure:
         "theta": 2.0,      // Typical value
         "omega": 30.0,     // Inter-individual variability (CV%)
         "bounds": [0.1, 10.0]  // Optional bounds
+      },
+      "V": {
+        "theta": 15.0,
+        "omega": 25.0,
+        "bounds": [5.0, 50.0]
+      },
+      "KA": {
+        "theta": 1.5,
+        "omega": 40.0,
+        "bounds": [0.1, 5.0]
       }
     }
   },
@@ -320,7 +330,7 @@ Each simulation generates several output files:
 ### Two-Compartment Model
 - **CL**: Clearance (L/h)
 - **V1**: Central volume of distribution (L)
-- **Q2**: Inter-compartmental clearance (L/h)
+- **Q**: Inter-compartmental clearance (L/h)
 - **V2**: Peripheral volume of distribution (L)
 - **KA**: Absorption rate constant (h⁻¹) - for oral dosing
 
